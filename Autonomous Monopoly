@@ -1,0 +1,493 @@
+#include "EV3Servo-lib-UW.c" 
+
+//library for the gripper 
+
+#include "PC_FileIO.c" 
+
+//library for robotC file i/o 
+
+const int NUM_SQUARES = 28; 
+
+const int OPEN_GRIPPER = 70; 
+
+const int CLOSE_GRIPPER = 18; 
+
+//these values were chosen for the ideal neutral gripper position to  
+
+// properly fit the game piece 
+
+ 
+
+int diceroll() // This function rolls a die 
+
+{ 
+
+int dice = 1+random(5); 
+
+//1 + the random function is chosen because if it were just the 
+
+// random function, it has a possibility of rolling a 0, so by  
+
+//adding 1 it removes this possibility 
+
+return dice; 
+
+} 
+
+void Drop_Piece() // This function drops the piece 
+
+{ 
+
+setGripperPosition(S2,4,OPEN_GRIPPER); 
+
+} 
+
+ 
+
+void Pick_Up_Piece() // This function picks up the piece 
+
+{ 
+
+setGripperPosition(S2,4,CLOSE_GRIPPER); 
+
+} 
+
+/* The arrays are declared globally due to memory constraints 
+
+permission received from teaching team for this.*/ 
+
+string Properties[NUM_SQUARES]; 
+
+int Prices[NUM_SQUARES]; 
+
+string Property_Types[NUM_SQUARES]; 
+
+int Rent_Values[NUM_SQUARES]; 
+
+int Square_Numbers[NUM_SQUARES]; 
+
+int Occupation_Statuses[NUM_SQUARES]; 
+
+void turn(int&turns)  
+
+// This function turns the robot and counts the number of turns 
+
+{ 
+
+int motorpower=15; 
+
+int angle = 90; 
+
+if (SensorValue[S1] == (int)colorBlack) 
+
+  { 
+
+   turns++; 
+
+   motor[motorA]=motor[motorD]=0; 
+
+   wait1Msec(200); 
+
+   motor[motorA]=-motorpower; 
+
+   motor[motorD]=motorpower; 
+
+   while(abs(getGyroDegrees(S4))<angle) 
+
+   {} 
+
+   motor[motorA]=motor[motorD]=0; 
+
+ 	} 
+
+} 
+
+void drive(int enclimit, int motorpower, int & turns) 
+
+// This functions drives the robot forwards 
+
+{ 
+
+    resetGyro(S4); 
+
+    nMotorEncoder[motorA]=0; 
+
+    while (SensorValue[S1] != (int)colorBlack && 
+
+    abs(nMotorEncoder[motorA])<enclimit && SensorValue[S3] == 0) 
+
+    { 
+
+        motor[motorA]=motor[motorD]=motorpower; 
+
+    } 
+
+    turn(turns); 
+
+    while(abs(nMotorEncoder[motorA])<enclimit && SensorValue[S3] == 0) 
+
+    { 
+
+     motor[motorA]=motor[motorD]=motorpower; 
+
+    } 
+
+    if (abs(nMotorEncoder[motorA]) == enclimit) 
+
+    { 
+
+     motor[motorA]=motor[motorD]=0; 
+
+    } 
+
+    nMotorEncoder[motorA]=0; 
+
+    if(SensorValue(S3) == 1) 
+
+    { 
+
+    	motor[motorA] = motor[motorD] = 0; 
+
+    } 
+
+} 
+
+ 
+
+void checkpayplayer(int&balance,int Current_Square,int*Rent_Values)  
+
+// This function has the robot pay rent 
+
+{ 
+
+    if (SensorValue[S1] == (int)colorYellow) 
+
+    { 
+
+        balance = balance - Rent_Values[Current_Square-1]; 
+
+        displayString(4, "I land on your property!"); 
+
+        displayString(5, "I pay you %d",Rent_Values[Current_Square-1]); 
+
+        displayString(6, "My balance is %d", (balance)); 
+
+        wait1Msec(5000); 
+
+        eraseDisplay(); 
+
+    } 
+
+} 
+
+ 
+
+void buyproperty(int&balance,int Current_Square,int*Prices)  
+
+// This function has the robot buy property 
+
+{ 
+
+    if (SensorValue[S1] != (int)colorYellow) 
+
+    { 
+
+    if(balance > Prices[Current_Square-1]) 
+
+    { 
+
+    eraseDisplay(); 
+
+    balance -= Prices[Current_Square-1]; 
+
+    displayString(5, "I bought this property for"); 
+
+    displayString(6,"$%d",Prices[Current_Square-1]); 
+
+    } 
+
+    else 
+
+    { 
+
+    eraseDisplay(); 
+
+    displayString(5, "I didn't buy this property."); 
+
+    } 
+
+    } 
+
+} 
+
+void configureAllSensors() // This function configures sensors 
+
+{ 
+
+    SensorType[S3] = sensorEV3_Touch; 
+
+    SensorType[S2] = sensorI2CCustom9V; 
+
+//This is the initialization for the gripper 
+
+    SensorType[S1] = sensorEV3_Color; 
+
+    wait1Msec(50); 
+
+    SensorMode[S1] = modeEV3Color_Color; 
+
+    wait1Msec(50); 
+
+    SensorType[S4] = sensorEV3_Gyro; 
+
+    wait1Msec(50); 
+
+    SensorMode[S4] = modeEV3Gyro_Calibration; 
+
+    wait1Msec(50); 
+
+    SensorMode[S4] = modeEV3Gyro_RateAndAngle; 
+
+    wait1Msec(50); 
+
+} 
+
+void diceRoll(int dice_roll, int&Current_Square) 
+
+// This function calculates the current square 
+
+{ 
+
+Current_Square += dice_roll; 
+
+if((Current_Square+dice_roll) > 28) 
+
+{ 
+
+Current_Square = abs(Current_Square-28); 
+
+} 
+
+else 
+
+{ 
+
+Current_Square += 0; 
+
+} 
+
+} 
+
+task main() 
+
+{ 
+
+// This section reads in files and assigns them to arrays 
+
+int Current_Square = 1; 
+
+TFileHandle fin; 
+
+TFileHandle fin2; 
+
+TFileHandle fin3; 
+
+TFileHandle fin4; 
+
+TFileHandle fin5; 
+
+openReadPC(fin,"Properties.txt"); 
+
+openReadPC(fin2,"Prices.txt"); 
+
+openReadPC(fin3,"Prop_Types.txt"); 
+
+openReadPC(fin4,"Rent.txt"); 
+
+openReadPC(fin5,"Square.txt"); 
+
+for (int i=0;i<NUM_SQUARES;i++) 
+
+{ 
+
+string Property = " "; 
+
+int Price = 0; 
+
+string Property_Type = " "; 
+
+int Rent_Value = 0; 
+
+int Square_Number = 0; 
+
+readTextPC(fin,Property); 
+
+readIntPC(fin2,Price); 
+
+readIntPC(fin4,Rent_Value); 
+
+readTextPC(fin3,Property_Type); 
+
+readIntPC(fin5,Square_Number); 
+
+Properties[i] = Property; 
+
+Prices[i] = Price; 
+
+Square_Numbers[i] = Square_Number; 
+
+Rent_Values[i] = Rent_Value; 
+
+Property_Types[i] = Property_Type; 
+
+} 
+
+bool payrobot=false; 
+
+bool robotturn=true; 
+
+      int balance =1000; 
+
+      int turns=0; 
+
+while (robotturn==true && balance > 0) 
+
+{ 
+
+if (time1[T1]/1000.0 > 30)  
+
+    // This section uses timers to hurry up the player 
+
+    { 
+
+      displayBigTextLine(13, "HURRY UP!"); 
+
+      wait1Msec(5000); 
+
+      eraseDisplay(); 
+
+     } 
+
+    while (!getButtonPress(buttonEnter)&&!getButtonPress(buttonUp) && 
+
+    !getButtonPress(buttonDown)) 
+
+    {} 
+
+    if (getButtonPress(buttonEnter))  
+
+    // This section passes the turn over to 
+
+    the robot 
+
+    { 
+
+     robotturn= true; 
+
+    } 
+
+    if(getButtonPress(buttonUp)) 
+
+    { 
+
+     robotturn=false; 
+
+    } 
+
+    if(getButtonPress(buttonDown)) 
+
+    { 
+
+     payrobot=true; 
+
+    } 
+
+    while (getButtonPress(buttonAny)) 
+
+    {} 
+
+    if (payrobot == true) 
+
+    { 
+
+     balance= balance+200; 
+
+     displayString(4, "You Owe Me Money"); 
+
+     wait1Msec(5000); 
+
+     eraseDisplay(); 
+
+    } 
+
+    if (robotturn == true)  
+
+    // This section runs all the code for the robot's turn 
+
+    { 
+
+     nMotorEncoder[motorA]=0; 
+
+     int dice = diceroll(); 
+
+     const int motorpower=15; 
+
+     float enclimit = (dice*20) * 180/(PI*2.75); 
+
+// the distance 20 is chosen so because the size of each square is  
+
+// 20cm, enough for the robot to fit on each square 
+
+     displayBigTextLine (2, "Robot Rolled %d", dice); 
+
+     configureAllSensors(); 
+
+     Pick_Up_Piece(); 
+
+     drive (enclimit, motorpower, turns); 
+
+     if (turns % 4 == 0)  
+
+     // This section adds $200 for every time Go is passes 
+
+     { 
+
+      balance += 200; 
+
+     } 
+
+     diceRoll(dice,Current_Square); 
+
+     buyproperty(balance,Current_Square,Prices); 
+
+     checkpayplayer(balance,Current_Square,Rent_Values); 
+
+     displayString(1, "Player Turn"); 
+
+ wait1Msec(5000); 
+
+ eraseDisplay(); 
+
+ clearTimer(T1); 
+
+ displayString(8, "Current balance is %d", (balance)); 
+
+ Drop_Piece(); 
+
+} 
+
+   } 
+
+if (robotturn==false)  
+
+// This section lets the robot know that it's won and ends the program 
+
+{ 
+
+displayBigTextLine(10, "I Win!"); 
+
+wait1Msec(3000); 
+
+} 
+
+} 
